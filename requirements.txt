@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+spacy
+faster-whisper
+dateparser
+python-multipart
