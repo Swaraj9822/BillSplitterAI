@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bill Splitter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --soft: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22c55e;
+      --warn: #ef4444;
+      --info: #60a5fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    header {
+      padding: 20px 16px; border-bottom: 1px solid #0b1220; background: linear-gradient(180deg, #0b132b, #0f172a);
+    }
+    .container { max-width: 1080px; margin: 0 auto; padding: 16px; }
+    h1 { margin: 0 0 8px 0; font-size: 24px; }
+    p.muted { margin: 0; color: var(--muted); }
+    .grid {
+      display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 16px;
+    }
+    @media (min-width: 900px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+    .card {
+      background: var(--panel); border: 1px solid #0b1220; border-radius: 12px; padding: 16px;
+    }
+    .card h2 { margin: 0 0 12px 0; font-size: 18px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .row > * { flex: 1 1 160px; }
+    input[type="text"], input[type="number"], select, textarea {
+      width: 100%; padding: 10px 12px; background: var(--soft); color: var(--text);
+      border: 1px solid #0b1220; border-radius: 8px; outline: none;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    button {
+      padding: 10px 14px; border: 1px solid #0b1220; border-radius: 8px; cursor: pointer;
+      background: #0b132b; color: var(--text);
+    }
+    button.primary { background: var(--accent); color: #04210f; border-color: #134e2a; }
+    button.warn { background: var(--warn); color: #2b0b0b; border-color: #7f1d1d; }
+    button.info { background: var(--info); color: #041428; border-color: #1e40af; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      background: var(--soft); padding: 6px 10px; border-radius: 999px; border: 1px solid #0b1220;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .chip .x { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid #0b1220; text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .right { text-align: right; }
+    .section-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+    .note { color: var(--muted); font-size: 14px; }
+    .pill {
+      padding: 4px 8px; border-radius: 999px; border: 1px solid #0b1220;
+      background: #0b132b; color: var(--text); font-size: 12px; display: inline-block;
+    }
+    .success { color: #86efac; }
+    .danger { color: #fca5a5; }
+    .footer { color: var(--muted); font-size: 12px; padding: 16px; text-align: center; }
+    .small { font-size: 12px; color: var(--muted); }
+    .block { display: block; }
+    .hr { height: 1px; background: #0b1220; margin: 12px 0; border: none; }
+    .scroll { max-height: 260px; overflow: auto; }
+    .wrap { word-break: break-word; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Bill Splitter</h1>
+      <p class="muted">Split expenses among 2–10 people, parse natural language, and add via voice using a local AI helper.</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Natural language / Voice</h2>
+      <div class="row">
+        <textarea id="nlInput" placeholder='e.g., "Rahul paid 1200 for dinner for Asha, Vivek on 21 Sep"'></textarea>
+      </div>
+      <div class="section-actions">
+        <button id="nlParseBtn" class="primary">Parse text</button>
+        <button id="micBtn" class="info">🎤 Start recording</button>
+        <span id="nlStatus" class="note"></span>
+      </div>
+      <p class="small">Tip: Keep a local AI server running to enable parsing and transcription (see backend/README.md).</p>
+    </section>
+
+    <div class="grid" style="margin-top:16px;">
+      <section class="card">
+        <h2>Participants</h2>
+        <div class="row">
+          <input id="personName" type="text" placeholder="Enter name (e.g., Ananya)" />
+          <button id="addPersonBtn" class="primary">Add</button>
+          <button id="clearAllBtn" class="warn">Clear All</button>
+        </div>
+        <p class="small">Supports 2–10 participants; names must be unique.</p>
+        <div id="peopleChips" class="chips" style="margin-top:10px;"></div>
+      </section>
+
+      <section class="card">
+        <h2>Add Expense</h2>
+        <div class="row">
+          <input id="expDesc" type="text" placeholder="Description (e.g., Dinner)" />
+          <input id="expAmt" type="number" min="0" step="0.01" placeholder="Amount" />
+        </div>
+        <div class="row">
+          <select id="expPayer"></select>
+          <button id="addExpenseBtn" class="primary">Add Expense</button>
+        </div>
+        <div style="margin-top:10px;">
+          <span class="small block">Included participants (split equally):</span>
+          <div id="expIncluded" class="chips" style="margin-top:8px;"></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:16px;">
+      <h2>Expenses</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Description</th>
+              <th class="right">Amount</th>
+              <th>Payer</th>
+              <th>Included</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="expTableBody"></tbody>
+        </table>
+      </div>
+      <div class="section-actions">
+        <button id="downloadCsvBtn" class="info">Export CSV</button>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px;">
+      <h2>Summary & Settlements</h2>
+      <div class="row">
+        <div><span class="pill">Total Spent:</span> <span id="totalSpent" class="success">₹0.00</span></div>
+      </div>
+      <div class="hr"></div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th class="right">Paid</th>
+              <th class="right">Share</th>
+              <th class="right">Net (Paid − Share)</th>
+            </tr>
+          </thead>
+          <tbody id="perPersonBody"></tbody>
+        </table>
+      </div>
+      <div class="section-actions" style="margin-top:12px;">
+        <button id="settleBtn" class="primary">Compute Settlements</button>
+      </div>
+      <div class="hr"></div>
+      <div id="settlements" class="wrap"></div>
+    </section>
+
+    <p class="footer">Frontend is static for GitHub Pages; AI features call a local backend at http://127.0.0.1:8000 when running.</p>
+  </main>
+
+  <script>
+    // ---------- Config ----------
+    // Local backend endpoint; change if needed
+    const BACKEND = "http://127.0.0.1:8000";
+
+    // ---------- State ----------
+    const stateKey = "billSplitterV1";
+    let people = [];
+    let expenses = [];
+
+    function saveState() {
+      localStorage.setItem(stateKey, JSON.stringify({ people, expenses }));
+    }
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(stateKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        people = Array.isArray(parsed.people) ? parsed.people : [];
+        expenses = Array.isArray(parsed.expenses) ? parsed.expenses : [];
+      } catch (_) {}
+    }
+
+    // ---------- Helpers ----------
+    const currency = (n) => "₹" + (Number(n || 0)).toFixed(2);
+    function uniqueName(name) {
+      const key = name.trim();
+      return !people.some(p => p.toLowerCase() === key.toLowerCase()) && key.length > 0;
+    }
+
+    // ---------- Rendering ----------
+    function renderPeople() {
+      const container = document.getElementById("peopleChips");
+      container.innerHTML = "";
+      people.forEach((name, idx) => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.innerHTML = `
+          <span>${name}</span>
+          <button class="x" title="Remove" data-index="${idx}">&times;</button>
+        `;
+        container.appendChild(chip);
+      });
+
+      const sel = document.getElementById("expPayer");
+      sel.innerHTML = "";
+      people.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name; opt.textContent = `Paid by: ${name}`;
+        sel.appendChild(opt);
+      });
+
+      const inc = document.getElementById("expIncluded");
+      inc.innerHTML = "";
+      people.forEach(name => {
+        const id = `inc_${name}`;
+        const chip = document.createElement("label");
+        chip.className = "chip";
+        chip.innerHTML = `
+          <input type="checkbox" id="${id}" data-name="${name}" checked />
+          <span>${name}</span>
+        `;
+        inc.appendChild(chip);
+      });
+    }
+
+    function renderExpenses() {
+      const body = document.getElementById("expTableBody");
+      body.innerHTML = "";
+      expenses.forEach((e, idx) => {
+        const tr = document.createElement("tr");
+        const includedList = e.included.join(", ");
+        tr.innerHTML = `
+          <td>${e.desc}</td>
+          <td class="right">${currency(e.amount)}</td>
+          <td>${e.payer}</td>
+          <td>${includedList}</td>
+          <td class="right"><button class="warn" data-expdel="${idx}">Delete</button></td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function computeBalances() {
+      const paid = Object.fromEntries(people.map(p => [p, 0]));
+      const share = Object.fromEntries(people.map(p => [p, 0]));
+      let total = 0;
+
+      for (const e of expenses) {
+        const amt = Number(e.amount);
+        if (isNaN(amt) || amt <= 0) continue;
+        total += amt;
+        if (paid[e.payer] != null) paid[e.payer] += amt;
+
+        const included = e.included.filter(n => people.includes(n));
+        if (included.length > 0) {
+          const each = amt / included.length;
+          included.forEach(n => share[n] += each);
+        }
+      }
+
+      const net = {};
+      people.forEach(p => net[p] = paid[p] - share[p]);
+      return { total, paid, share, net };
+    }
+
+    function computeSettlements(net) {
+      let creditors = [];
+      let debtors = [];
+      for (const [name, val] of Object.entries(net)) {
+        if (Math.abs(val) < 1e-9) continue;
+        if (val > 0) creditors.push({ name, amt: +val.toFixed(2) });
+        if (val < 0) debtors.push({ name, amt: +(-val).toFixed(2) });
+      }
+      creditors.sort((a, b) => b.amt - a.amt);
+      debtors.sort((a, b) => b.amt - a.amt);
+
+      const txns = [];
+      let i = 0, j = 0;
+      while (i < debtors.length && j < creditors.length) {
+        const give = debtors[i];
+        const take = creditors[j];
+        const m = Math.min(give.amt, take.amt);
+        if (m > 0.005) {
+          txns.push({ from: give.name, to: take.name, amount: +m.toFixed(2) });
+        }
+        give.amt = +(give.amt - m).toFixed(2);
+        take.amt = +(take.amt - m).toFixed(2);
+        if (give.amt <= 0.005) i++;
+        if (take.amt <= 0.005) j++;
+      }
+      return txns;
+    }
+
+    function renderSummary() {
+      const { total, paid, share, net } = computeBalances();
+      document.getElementById("totalSpent").textContent = currency(total);
+
+      const body = document.getElementById("perPersonBody");
+      body.innerHTML = "";
+      people.forEach(p => {
+        const tr = document.createElement("tr");
+        const netStr = net[p] >= 0 ? `<span class="success">${currency(net[p])}</span>` : `<span class="danger">${currency(net[p])}</span>`;
+        tr.innerHTML = `
+          <td>${p}</td>
+          <td class="right">${currency(paid[p])}</td>
+          <td class="right">${currency(share[p])}</td>
+          <td class="right">${netStr}</td>
+        `;
+        body.appendChild(tr);
+      });
+
+      document.getElementById("settlements").innerHTML = `<span class="note">Click “Compute Settlements” to see the minimized transfers.</span>`;
+    }
+
+    function renderAll() {
+      renderPeople();
+      renderExpenses();
+      renderSummary();
+      saveState();
+      updateButtonsState();
+    }
+
+    function updateButtonsState() {
+      document.getElementById("addPersonBtn").disabled = people.length >= 10;
+    }
+
+    // ---------- CSV Export ----------
+    function toCsv(rows) {
+      return rows.map(r => r.map(c => {
+        const s = String(c ?? "");
+        if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
+          return "\"" + s.replace(/"/g, "\"\"") + "\"";
+        }
+        return s;
+      }).join(",")).join("\n");
+    }
+
+    function downloadCsv() {
+      const { total, paid, share, net } = computeBalances();
+      const settlements = computeSettlements(net);
+
+      const rows = [];
+      rows.push(["Bill Splitter Export"]);
+      rows.push([]);
+      rows.push(["Participants"]);
+      people.forEach(p => rows.push([p]));
+      rows.push([]);
+
+      rows.push(["Expenses"]);
+      rows.push(["Description", "Amount", "Payer", "Included"]);
+      expenses.forEach(e => rows.push([e.desc, e.amount, e.payer, e.included.join(" | ") ]));
+      rows.push([]);
+
+      rows.push(["Summary"]);
+      rows.push(["Total Spent", total.toFixed(2)]);
+      rows.push([]);
+      rows.push(["Person", "Paid", "Share", "Net"]);
+      people.forEach(p => rows.push([p, paid[p].toFixed(2), share[p].toFixed(2), net[p].toFixed(2)]));
+
+      rows.push([]);
+      rows.push(["Settlements"]);
+      rows.push(["From", "To", "Amount"]);
+      settlements.forEach(t => rows.push([t.from, t.to, t.amount.toFixed(2)]));
+
+      const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "bill_splitter_export.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    // ---------- Natural language + Voice ----------
+    async function applyParsedToForm(data) {
+      if (data.desc) document.getElementById("expDesc").value = data.desc;
+      if (data.amount) document.getElementById("expAmt").value = data.amount;
+      if (data.payer && people.includes(data.payer)) {
+        document.getElementById("expPayer").value = data.payer;
+      }
+      const checks = Array.from(document.querySelectorAll("#expIncluded input[type=checkbox]"));
+      if (data.participants && data.participants.length) {
+        checks.forEach(c => c.checked = false);
+        data.participants.forEach(name => {
+          const c = checks.find(x => x.getAttribute("data-name") === name);
+          if (c) c.checked = true;
+        });
+        if (data.payer) {
+          const pc = checks.find(x => x.getAttribute("data-name") === data.payer);
+          if (pc) pc.checked = true;
+        }
+      }
+      renderSummary();
+    }
+
+    document.getElementById("nlParseBtn").addEventListener("click", async () => {
+      const t = document.getElementById("nlInput").value.trim();
+      if (!t) return;
+      const s = document.getElementById("nlStatus");
+      s.textContent = "Parsing...";
+      try {
+        const resp = await fetch(`${BACKEND}/parse_text`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: t })
+        });
+        const data = await resp.json();
+        await applyParsedToForm(data);
+        s.textContent = "Parsed ✔";
+      } catch (e) {
+        s.textContent = "Parse failed";
+      }
+    });
+
+    let mediaRecorder = null;
+    let chunks = [];
+    const micBtn = document.getElementById("micBtn");
+    micBtn.addEventListener("click", async () => {
+      const s = document.getElementById("nlStatus");
+      if (!mediaRecorder) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+          mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(chunks, { type: "audio/webm" });
+            chunks = [];
+            s.textContent = "Transcribing...";
+            try {
+              const fd = new FormData();
+              fd.append("file", blob, "note.webm");
+              const r = await fetch(`${BACKEND}/transcribe`, { method: "POST", body: fd });
+              const j = await r.json();
+              if (j.text) {
+                document.getElementById("nlInput").value = j.text;
+                const pr = await fetch(`${BACKEND}/parse_text`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ text: j.text })
+                });
+                const data = await pr.json();
+                await applyParsedToForm(data);
+                s.textContent = "Transcribed + parsed ✔";
+              } else {
+                s.textContent = "Transcription failed";
+              }
+            } catch (e) {
+              s.textContent = "Transcription error";
+            }
+          };
+          mediaRecorder.start();
+          micBtn.textContent = "⏹ Stop";
+          s.textContent = "Recording...";
+        } catch (e) {
+          s.textContent = "Mic permission denied";
+        }
+      } else {
+        mediaRecorder.stop();
+        mediaRecorder = null;
+        micBtn.textContent = "🎤 Start recording";
+      }
+    });
+
+    // ---------- Events ----------
+    document.getElementById("addPersonBtn").addEventListener("click", () => {
+      const input = document.getElementById("personName");
+      const name = input.value.trim();
+      if (!uniqueName(name)) return;
+      if (people.length >= 10) return;
+      people.push(name);
+      input.value = "";
+      renderAll();
+    });
+
+    document.getElementById("peopleChips").addEventListener("click", (e) => {
+      const idx = e.target.getAttribute("data-index");
+      if (idx == null) return;
+      const name = people[Number(idx)];
+      people.splice(Number(idx), 1);
+      expenses = expenses
+        .map(exp => ({
+          ...exp,
+          included: exp.included.filter(n => n !== name)
+        }))
+        .filter(exp => people.includes(exp.payer));
+      renderAll();
+    });
+
+    document.getElementById("addExpenseBtn").addEventListener("click", () => {
+      if (people.length < 2) { alert("Add at least 2 participants."); return; }
+      const desc = document.getElementById("expDesc").value.trim() || "(No description)";
+      const amtRaw = document.getElementById("expAmt").value;
+      const amt = Number(amtRaw);
+      const payer = document.getElementById("expPayer").value;
+      const checks = Array.from(document.querySelectorAll("#expIncluded input[type=checkbox]"));
+      const included = checks.filter(c => c.checked).map(c => c.getAttribute("data-name"));
+
+      if (!people.includes(payer)) { alert("Select a valid payer."); return; }
+      if (!(amt > 0)) { alert("Enter a valid amount."); return; }
+      if (included.length === 0) { alert("Select at least one participant for this expense."); return; }
+
+      expenses.push({ desc, amount: +amt.toFixed(2), payer, included });
+      document.getElementById("expDesc").value = "";
+      document.getElementById("expAmt").value = "";
+      renderAll();
+    });
+
+    document.getElementById("expTableBody").addEventListener("click", (e) => {
+      const idx = e.target.getAttribute("data-expdel");
+      if (idx == null) return;
+      expenses.splice(Number(idx), 1);
+      renderAll();
+    });
+
+    document.getElementById("settleBtn").addEventListener("click", () => {
+      const { net } = computeBalances();
+      const txns = computeSettlements(net);
+      const box = document.getElementById("settlements");
+      if (txns.length === 0) {
+        box.innerHTML = `<span class="note">All settled — no transfers needed.</span>`;
+        return;
+      }
+      box.innerHTML = "";
+      const ul = document.createElement("ul");
+      ul.style.listStyle = "none";
+      ul.style.paddingLeft = "0";
+      txns.forEach(t => {
+        const li = document.createElement("li");
+        li.style.margin = "6px 0";
+        li.innerHTML = `<span class="pill">${t.from} → ${t.to}</span> <span class="success">${currency(t.amount)}</span>`;
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+    });
+
+    document.getElementById("downloadCsvBtn").addEventListener("click", downloadCsv);
+
+    document.getElementById("clearAllBtn").addEventListener("click", () => {
+      if (!confirm("Clear all data?")) return;
+      people = [];
+      expenses = [];
+      renderAll();
+    });
+
+    // ---------- Init ----------
+    loadState();
+    renderAll();
+  </script>
+</body>
+</html>
